@@ -1,0 +1,26 @@
+current protocol idea
+
+universal to send across a p2p network X
+
+packet id was gonna be used (the one that is the same for each packet)
+we will skip this and only use the packet id that carries the packet instruction
+we will refer to this as the "command" entry in the packet header
+
+we need commands for:
+	rgb/volume/rgb+volume set (1 req can be used for all, 0 resp)
+	getting device info and managing current configuration (multiple, to be implemented)
+	identifying rgb devices on the network (1 ping req, 1 ping resp (includes device info etc as the command is intended for discovery and not latency measurement)
+
+also some universal acknowledgement or response system
+
+Idea:
+	all devices hold a common 32bit value, the ping command works by sending random data to a device and device responding with the data xorred with the common value
+	ping packet format:
+		request: "RGB2" + 32bit random data
+		response: "RGB2" + 32bit xorred data with the common value + device information (to be implemented)
+
+Idea:
+	MSB in the command packet signals an acknowledgement, all packets can carry this, example:
+		non-ack packet: 1bit 0 + 7bit command + command data
+		ack packet: 1bit 1 + 7bit command + 8bit packet id + command data
+		ack response: 1bit <0|1> + 7bit command for "ack response" + 8bit acknowledged packet id <end of packet>

@@ -1,0 +1,2 @@
+network X - meaning any form of network that allows sending data (wifi, rf, eth, uart, ...)
+datastore (or keystore) - meaning some system the devices can store data and communicate about it to the server (wifi credentials, device name)

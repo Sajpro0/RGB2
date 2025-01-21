@@ -1,1 +1,1 @@
-# RGB2
+# Refer to README.txt

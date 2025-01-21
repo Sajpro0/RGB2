@@ -1,0 +1,30 @@
+the way devices will manage configurations etc
+
+to implement:
+	Readonly storage (or temp storage with default value): value included at compile time which the device will always work with
+	RW storage: non-volatile data storage intended usually for device configuration
+	Temp storage: volatile data storage loaded and changed at runtime usually by the controller, reason of use is shared variables
+	Possibly Saveable temp storage to retain information till next reboot
+
+
+Idea:
+	keystore stores data in this way:
+	8bit key store identifier (where id=0 is illegal)
+	this id is globally standardized and all devices either know exactly what the id is for or they do not
+	why: would be usually simpler to implement than fully dynamic keystore configurations where you can save any data type under any name
+	key store id 254 indicates an extended value, and the next 2 bytes are the id instead (the extended keystore is isolated from the regular one (
+		aka 0x24 in the regular key store does not equal the same value as 0x0024 in the extended keystore) )
+	key store id 255 indicates a custom/extended value that has a string name and a value (optional, usually useless on devices, reserved for now)
+	this idea is great as it simplifies the data structure a lot
+	when a device doesn't recognize an id, the processing is undefined, as it can reject it or keep it temporarily or store it
+	this is not that practical, as the device can choose to save the value in it's non-volatile storage, despite not knowing what it means and doesn't know the type
+	so instead, all devices have a defined behaviour of refusing using values they do not know, this simplifies it a lot without much compromise
+	using that, devices do not need to remember the data type along with the value is they can subsume it from the id
+	this would also need/be useful to have a command used for showing all supported keys, this simplifies things even more as the extended data store
+		can be used for temporary values for filters at a set ids
+	that however rises a question if the datastores should be separate (readonly from rw and from temp) as as of now it is undefined how the device
+		will save the data when requested to have a value set and the device not knowing if the value is supposed to be temporary or rw
+		However that is not actually a case, as using set numbers, the devices can subsume this from it as well
+	also standard idea, regular data store contains the current values, while the extended datastore has the same ids reserved for permanent default values
+	as everything is static, data entries do not have a universal way to signal if the data is set or not, so the data is always set
+		mitigating this is done by the entry having a globally defined default value (unless exceptions where there is another entry signaling the set/unset status)

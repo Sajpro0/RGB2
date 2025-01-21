@@ -1,0 +1,20 @@
+every rgb device can support the datastore protocols
+datastore works by using globally standardized 8bit ids as keys
+
+datastore values can be:
+	permanent: the value is permanently set, used just so the controller can retreive information from it (like fw version)
+		some devices can support changing this value, but it will only be a temporary overlay of the permanent data with the value
+	rw: the value is saved on the device in a non-volatile storage, persisting across power cycles and restarts
+		this is used for storing configuration data like wifi login credentials
+	temporary: the value is unset at start and can be loaded by the controller
+
+there are 2 data stores:
+	regular (8bit): id=0 is illegal, id=254 means extended datastore in protocol talk, id=255 is reserved for now
+		used to save all sorts of common universal values that most devices usually have in common
+	extended (16bit): id=0 is illegal, id=1-253 are permanent values for the same ids used in the regular datastore
+		used to save more specific configurations (like currently active filters or other kinds of toggles)
+
+
+data type and if it is perm/rw/temp is statically globally defined
+when a device does not recognize the id, it must reject it
+because of ids being statically linked to types, each must also have a defined default value (though the definition can be "undefined")

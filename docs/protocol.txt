@@ -1,0 +1,11 @@
+definition of the protocol used between the server/controller and the devices
+
+used over network X which needs to handle error detection, but not packet delivery
+
+UDP port: 39368
+
+packet format:
+	1 bit acknowledgement + 7bit command (+ 8bit acknowledgement id if ack bit is set) + command data
+
+acknowledging packets:
+	1bit ack 1 + 7bit static command id for ack response + 8bit acknowledged id (+ specific packet response data)
