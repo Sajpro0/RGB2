@@ -1,0 +1,14 @@
+this file contains globally defined ids of the datastore
+
+format: [e]id (modifier): description
+example:	69 (perm:string): the funny register containing a string "sex"
+			e420 (perm:string): register in the extended datastore containing a string "funny weed number"
+			13 (rw:byte[4]): a static ip address to use
+
+all of the above are just examples and are not actually used
+----------
+
+1 (perm:string): permanent device ID, this is NOT the device NAME, it is a unique string the device has of a potentially known format
+2 (rw:string): readable device string name
+32 (rw:string): wifi login SSID prefided with a "1" character if it is rw and "0" if the value is not changeable
+33 (rw:string): wifi login password with same format as id 32

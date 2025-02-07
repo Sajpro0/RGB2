@@ -24,3 +24,11 @@ Idea:
 		non-ack packet: 1bit 0 + 7bit command + command data
 		ack packet: 1bit 1 + 7bit command + 8bit packet id + command data
 		ack response: 1bit <0|1> + 7bit command for "ack response" + 8bit acknowledged packet id <end of packet>
+
+Idea:
+	datastore used for basically everything
+	only ping and rgb(+v) and (save + load) packets are separate and everything uses datastore
+	(datastore rw storage is kept in memory only and only written once save is called, can also be diferent in memory and loaded by calling load)
+	by this logic, we can store the device's capabilities at a set id in the datastore
+	also, all devices must support the datastore protocol and have a value at that id, the value at that id is of format:
+	(byte signaling datastore register existence)(another byte for a different register) ... [(254 byte)(16bit register id from the extended datastore)(another) ... ]

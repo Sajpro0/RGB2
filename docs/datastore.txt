@@ -3,10 +3,16 @@ datastore works by using globally standardized 8bit ids as keys
 
 datastore values can be:
 	permanent: the value is permanently set, used just so the controller can retreive information from it (like fw version)
-		some devices can support changing this value, but it will only be a temporary overlay of the permanent data with the value
 	rw: the value is saved on the device in a non-volatile storage, persisting across power cycles and restarts
 		this is used for storing configuration data like wifi login credentials
-	temporary: the value is unset at start and can be loaded by the controller
+		the value is temporary and is only saved when receiving a save command unless specified otherwise (some kind of autosave system)
+	temporary: the value is defined at start according to it's documentation
+		the value can be set and get by the controller as well as the device itself unless specified otherwise
+	rpc: the value is generated and sent back on read or processed on write
+
+permanent storage resides in the microcontroller's data memory (defined as const in the program) so everything points to that location
+rw storage resides in whatever storage the microcontroller decides to use and is loaded ONCE on startup and then can be subsequently loaded and saved by commands
+temporary storage is loaded at start and changeable at runtime, it has a static default value specified in it's docs unless specified otherwise
 
 there are 2 data stores:
 	regular (8bit): id=0 is illegal, id=254 means extended datastore in protocol talk, id=255 is reserved for now
@@ -18,3 +24,4 @@ there are 2 data stores:
 data type and if it is perm/rw/temp is statically globally defined
 when a device does not recognize the id, it must reject it
 because of ids being statically linked to types, each must also have a defined default value (though the definition can be "undefined")
+

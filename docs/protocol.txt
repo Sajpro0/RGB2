@@ -9,3 +9,4 @@ packet format:
 
 acknowledging packets:
 	1bit ack 1 + 7bit static command id for ack response + 8bit acknowledged id (+ specific packet response data)
+	an ack request is needed for commands that failed to process

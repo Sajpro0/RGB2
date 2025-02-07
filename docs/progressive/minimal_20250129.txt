@@ -1,0 +1,119 @@
+minimal implementation of what i have thought of so far
+
+each implementation has everything the previous one had
+
+implementation A:
+	packet rgb
+	the device connect to a static wifi network at start, accepting udp packets on a set port
+	we can manually send or broadcast an rgb packet: (1byte protocol id) + (1bit unset ack) + (7bit rgb packet id) + (3 bytes RGB)
+
+	this implementation should work, as there is no real problem and should allow us to build on top of it
+
+implementation B:
+	packet ping
+
+	as the current ack specification is not-so-great and we will likely not be using more than 16 different packets, the packet format is changed to:
+		1byte proto id + 1bit ack + 1bit syn or ack id + 2bit resv or ack id + 4bit command or ack id + ack or command data
+		example:
+			1byte proto id + 1 bit unset ack + 1bit unset syn + 2bit resv + 4bit command id + command data
+			(device does not respond as packet has no ack id)
+		example 2:
+			1byte proto id + 1bit unset ack + 1bit set syn + 2bit resv + 4bit cmd + 1bit unset + 7bit ack id + command data
+			(device responds)
+			1byte proto id + 1bit set ack + 7bit ack id + ack data
+		some packets may have an implicit ack as a static part of the command
+
+	got a better idea, wanted to scrap the above idea, but instead we will change the meaning of the syn flag:
+		the syn flag is not needed as the commands can have statically defined if they are to be acknowleged and automatically
+		have an ack id byte following after the command bits, but as we do not need the free bytes anyway, we will instead change the meaning of syn flags
+		or nevermind, it could be good for debugging to force syn on certain packets, as the ack packets can have zero data to simply acknowlege receivement,
+		that is now the current meaning of ack and syn flags
+		syn flag gives the responder an id to work with, so the responder has to acknowlege it in some way, one of which can be an error ackowledgement,
+		defined statically for all packets
+		tldr, syn changes the response to contain a null-separated string or have zero length, the commands otherwise to include their own ack
+		
+
+	we have added an option to send or broadcast a ping packet: (1 byte protocol id) + (1bit unset ack) + (1bit) + (7bit command id) + 1byte ack id + random 32bit data
+	if ping works, we should get a packet back: 1byte protocol id + 1bit unset + 7bit ack response id + 1byte
+
+
+implementation B (again, tomorrow):
+	for tomorrow, think if we actually need an ack and all
+	for devices like this, response speed (in packets) is pretty unnecessary, we might not even use packet ids
+	Idea:
+		a specific packet id signals a response
+		in order to receive the correct response to the correct packet, only send out one packet requiring a response
+		to handle retransmissions, a single bit could be toggled between different packets (retransmissions keep the current value)
+		packet format for this idea:
+			1byte protocol id + 1bit id toggle + 7bit packet id + packet data
+			on retransmission, id toggle does not change, if a packet requires acknowledgement depends on the packet command and possibly content
+			when a packet is acknowledged, the id bit toggles for ALL packets, the device can use this to detect that the retransmission was received by reading
+			non-acknowledgeable packets
+
+	ping:
+		1byte packet proto id + 1bit toggle A + 7bit command for PING + 32bit random data
+		A retains it's value until a valid acknowledgement is received and until then, retransmissions may occur
+		(device responds)
+		1byte packet proto id + 1bit value of A in received packet + 7bit command for RESPONSE + 32bit data xorred with a set value
+		(the packet is kept in a buffer in need of retransmission)
+		(in case of an acknowledge packet with the same A value, it is treated as a retransmission and the buffered packet is sent back automatically)
+		(controller receives the acknowledgement and toggles A (A is ~A from now on))
+		(controller wants to read register 47 (we will just assume datastore is implemented for this test example) )
+		1byte packet proto id + 1bit A + 7bit command for READREG + 8bits "47"
+		(controller retransmits until receiving back a response)
+		(device receives the packet and acts:)
+		device has key:
+			1byte proto id + 1bit same value as A in received packet + 7bit command for RESPONSE + key data
+			(...)
+		device doesn't have key:
+			1byte proto id + 1bit unset + 7bit command for ERROR + error string
+			(...)
+
+		this seems to work flawlessly as of now, lets hope it actually does do that
+	won't do future implementations, this seems to work okay, we have a form of ack that works and can detect retransmissions
+	plus also the datakey example also seemed to work sooo
+
+	also for convenience, second bit will force an ack on non-ack packets, using on already acked packets is undefined/illegal
+	(reason: simple rgb send and ensure it was set)
+
+	so the current packet format is:
+		1byte proto id + 1bit A (retransmission detection bit) + 1bit ack (if set on ack packets, the response is supressed
+		while we only get an acknowledgement about the packet's arrival) + 2bit resv + 4bit command + command data
+
+	datastore Idea:
+		a specific register holds a CSV string, the controller can read this and use it to load the available registers
+		(also this approach supports registers that are only available when 2 special values are defined)
+		if this approach is chosen, it should be an extension to the register containing the byte array that specifies available registers
+		idea for that:
+			when the byte array is too big to send or something, the value should be a zero byte, which does not signal "no registers avaialble",
+			as that would be no bytes whatsoever, and register id 0 was reserved for these purposes
+
+	small problem:
+		when the connection is somehow lost, the device might accidentally send a packet that would get treated as a retransmission (50% chance to be exact)
+		we could mitigate this by adding an exception to a specific packet that will have acknowledgements ignored and will reset the device to default values,
+		this packet also has no retransmission detection and will never be treated as one
+		also because we have this, A can not propably be safely ignored for non-ack packets
+
+	datastore register notation and stuff:
+		as all registers have some default values and can contain default values that are valid
+		whatever, the idea is just that when a read is requested on an invalid register (like the register is not used on the device),
+		the device will send back an error message
+
+	another idea for better debug: extended send (not gonna implement)
+		idea is to have a packet for extended send that will have other parameters (like when a normal packet fails, we can send an extended version 
+		carrying a packet id so we can make sure we refer to the correct packet)
+		on other hand, this is not needed cus we can ack any packet now and we know we will get an error and not an ack back and the error can only be to that
+		packet as we can choose to not send anything else
+
+	register scanning/acknowledgement:
+		we can always manually scan registers on the device by trying to read from each register but that is very inefficient if we just want to enumerate them
+		there was an idea for the csv string already, will reuse that
+		part 1:
+			there is a register holding a csv string of the device's FEATURES
+			this register has feature values that the controller can read and translate them into existing registers on the device
+		part 2:
+			there is a register holding a byte array of all the registers available on the device (readable or writable - that is statically deifned by the register)
+			the format is: 1 byte register id + 1 byte other register id + ... + 1 byte EXTENDED REGISTER byte + 
+			2 byte extended register id + 2 byte other extended register id + ... + (packet ends)
+			there is a chance that the sending protocol does not support the packet size that the packet would take up,
+			instead the returning packet will have a single zero byte (as that is an invalid register)
