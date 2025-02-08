@@ -10,5 +10,10 @@ all of the above are just examples and are not actually used
 
 1 (perm:string): permanent device ID, this is NOT the device NAME, it is a unique string the device has of a potentially known format
 2 (rw:string): readable device string name
+3 (perm:string): csv of the device's features
+4 (perm:bytes): byte array of datastore entries on the device, format:
+	1 byte register id + 1 byte other register id + ... + 1 byte EXTENDED REGISTER byte + 
+	2 byte extended register id + 2 byte other extended register id + ... + (packet ends)
+	it is UNDEFINED if this register is included in the list
 32 (rw:string): wifi login SSID prefided with a "1" character if it is rw and "0" if the value is not changeable
 33 (rw:string): wifi login password with same format as id 32

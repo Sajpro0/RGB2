@@ -3,6 +3,7 @@ definition of the protocol used between the server/controller and the devices
 used over network X which needs to handle error detection, but not packet delivery
 
 UDP port: 39368
+proto sig: 159
 
 packet format:
 	1 bit acknowledgement + 7bit command (+ 8bit acknowledgement id if ack bit is set) + command data

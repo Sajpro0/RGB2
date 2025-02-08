@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
 
 #pragma region SETTINGS
 
@@ -135,7 +136,7 @@ class Datastore{
     DataEntry * get(uint8_t id){
       for (int i = 0; i < entryCnt; i++){
         DataEntry& entry = entries[i];
-        uint8_t extended = entry.type >> 7;
+        uint8_t extended = entry.type >> 7 & 1;
         if (extended || entry.id.u8 != id) // this is not an extended query
           continue;
         return &entry;
@@ -187,9 +188,9 @@ char * create_id(){
 }
 
 String bits(uint8_t v){
-  char str[9];
+  static char str[9];
   for (int i = 0; i < 8; i++){
-    str[i] = (i >> (7 - i) & 1) ? '1' : '0';
+    str[i] = (v >> (7 - i) & 1) ? '1' : '0';
   }
   str[8] = 0;
   return String(str);
@@ -197,16 +198,68 @@ String bits(uint8_t v){
 
 Datastore Store;
 
-#define ENTRY_SSID (uint8_t)32
-#define ENTRY_SSIDPASS (uint8_t)33
-#define ENTRY_DEVID (uint8_t)1
-#define ENTRY_DEVNAME (uint8_t)2
+#include "entries.h"
+#include "preset.h"
 
 #define WIFI_SSID "SSID HERE"
 #define WIFI_PASS "PASS HERE"
 
 #include "my_settings.h"
 
+// enumerates the available datastores and print when buf is 0, otherwise do not print and format the entries into ENTRY_ENTRYARRAY format, always returns the amount of bytes written
+// (counts how many bytes we need to actually write if buf is set to 0)
+int enum_entires(uint8_t* buf){
+  int bytesWritten = 0;
+  for (int i = 1; i <= 253; i++){
+    DataEntry * entry = Store.get((uint8_t)i);
+    if (entry){
+      bytesWritten++;
+      if (buf){
+        *buf = (uint8_t)i;
+        buf++;
+      }
+      else{
+        Serial.println("at " + String(i) + ": 0b" + bits(entry->type));
+      }
+    }
+      
+  }
+  bool foundExtended = false;
+  for (int i = 1; i <= 0b1111111111111111; i++){
+    DataEntry * entry = Store.get((uint16_t)i);
+    if (entry){ // entry is found
+      
+      if (buf){ // buf is set
+        if (!foundExtended){ // first ext
+          bytesWritten++;
+          foundExtended = true;
+          *buf = 254;
+          buf++;
+        }
+        bytesWritten += 2;
+        *buf = ((uint16_t)i) >> 8 & 0xFF;
+        buf++;
+        *buf = ((uint16_t)i) & 0xFF;
+        buf++;
+      }
+      else{ // buf not set
+        if (!foundExtended){ // first ext
+          bytesWritten++;
+          foundExtended = true;
+          Serial.println("ext:");
+        }
+        bytesWritten += 2;
+        Serial.println("at " + String(i) + ": 0b" + bits(entry->type));
+      }
+    }
+      
+  }
+  if (!buf)
+    Serial.println("Enumeration done");
+  return bytesWritten;
+}
+
+// load values into the datastore either default or perhaps from external storage
 void setup_datastore(){
   Serial.println("Setting up datastore...");
   constexpr int count = 8;
@@ -215,23 +268,27 @@ void setup_datastore(){
   Store.entryCnt = count;
   entries[0] = DataEntry(ENTRY_SSID, DataEntry::typeString | DataEntry::typeRW, strdup((String("0") + WIFI_SSID).c_str()));
   entries[1] = DataEntry(ENTRY_SSIDPASS, DataEntry::typeString | DataEntry::typeRW, strdup((String("0") + WIFI_PASS).c_str()));
-  entries[2] = DataEntry(ENTRY_DEVID,DataEntry::typePerm | DataEntry::typeString, create_id());
-  entries[3] = DataEntry(ENTRY_DEVNAME,DataEntry::typeRW | DataEntry::typeString, strdup(entries[2].data.str));
-  for (int i = 1; i <= 253; i++){
-    DataEntry * entry = Store.get((uint8_t)i);
-    if (entry)
-      Serial.println("at " + String(i) + ": 0b" + bits(entry->type));
-  }
-  for (int i = 1; i <= 0b1111111111111111; i++){
-    DataEntry * entry = Store.get((uint16_t)i);
-    if (entry)
-      Serial.println("at e" + String(i) + ": 0b" + bits(entry->type));
-  }
-  Serial.println("Enumeration done");
+  entries[2] = DataEntry(ENTRY_DEVID, DataEntry::typePerm | DataEntry::typeString, create_id());
+  entries[3] = DataEntry(ENTRY_DEVNAME, DataEntry::typeRW | DataEntry::typeString, strdup(entries[2].data.str));
+
+  entries[count - 2] = DataEntry(ENTRY_FEATURES, DataEntry::typePerm | DataEntry::typeString, (char*)"wifi");
+
+  int len = enum_entires(0);
+  uint8_t * buf = new uint8_t[len];
+  enum_entires(buf);
+  entries[count - 1] = DataEntry(ENTRY_ENTRYARRAY, DataEntry::typePerm | DataEntry::typeBuf, buf);
+  Serial.println();
+  Serial.println("Enumeration run 2");
+  enum_entires(0);
 }
+
+void init_loop();
+
+uint8_t local_ip[4];
 
 // setup the network connection (like connection to a wifi AP)
 void setup_network(){
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.mode(WIFI_STA);
   char * ssid = (char*)Store.get(ENTRY_SSID)->get();
   char * pass = (char*)Store.get(ENTRY_SSIDPASS)->get();
@@ -254,7 +311,14 @@ void setup_network(){
     delay(2000);
   }
   Serial.println("Connected");
+  uint32_t ipv4ip = WiFi.localIP().v4();
+  memcpy(local_ip, (uint8_t*)&ipv4ip, 4);
   Serial.flush();
+}
+
+WiFiUDP udp;
+void setup_connection(){
+  udp.begin(UDP_LISTEN_PORT);
 }
 
 void setup() {
@@ -266,8 +330,103 @@ void setup() {
   #endif
   setup_datastore();
   setup_network();
+  setup_connection();
+  init_loop();
 }
 
+
+void discard_packet(WiFiUDP& c, int len){
+  constexpr int chunk = 128;
+  
+}
+
+bool loop_connection(){
+  int bytes = udp.parsePacket();
+  if (bytes){
+    uint8_t b = udp.read();
+    bytes--;
+    
+    if (b != PROTO_SIG || bytes > 128){ // nonsense packet, throw away
+      discard_packet(udp, bytes);
+    }
+    else{
+      if (bytes == 0)
+        return false; // garbage arrived, but arrived, not eligible for sleep
+      b = udp.read();
+
+    }
+  }
+  return true;
+}
+
+bool do_filter(){
+
+  return true;
+}
+
+unsigned long lastFilterSleepTime = 0;
+constexpr unsigned long filterInterval = 10;
+bool loop_filters(){
+  unsigned long time = millis();
+  auto elapsed = time - lastFilterSleepTime;
+  bool okayToSleep = true;
+  while (elapsed >= filterInterval){
+    if (!do_filter())
+      okayToSleep = false;
+    elapsed -= filterInterval;
+  }
+
+  lastFilterSleepTime += (time - lastFilterSleepTime) - elapsed; // remove the amount of time we processed (time elapsed - leftover time after stepping)
+
+  return okayToSleep;
+}
+
+
+
+void sleep_enter(){
+  Serial.println("Entering sleep...");
+  Serial.flush();
+  WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
+}
+
+void sleep_leave(){
+  Serial.println("Leaving sleep...");
+  Serial.flush();
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+}
+
+void sleep_poll(){
+  delay(1000);
+}
+
+unsigned long loopSleepTime = 0; // the time captured when the loop needed updating last
+unsigned long loopSleepTimeout = 5000; // the time for the device to go into sleep
+bool wasSleeping = false;
+// all loop functions should return true if device is eligible for sleep
 void loop() {
-  // put your main code here, to run repeatedly:
+  unsigned long time = millis();
+  if (loop_connection() && loop_filters()){
+    if (millis() - loopSleepTime > loopSleepTimeout){
+      if (!wasSleeping){
+        sleep_enter();
+        wasSleeping = true;
+      }
+      sleep_poll();
+    }
+  }
+  else{
+    if (wasSleeping){
+      sleep_leave();
+    }
+    loopSleepTime = time;
+  }
+}
+
+// prepare the loop for running (mainly millis-based things)
+void init_loop(){
+  auto time = millis();
+  loopSleepTime = time;
+  lastFilterSleepTime = time;
+  Serial.println("Main loop running...");
+  Serial.flush();
 }
