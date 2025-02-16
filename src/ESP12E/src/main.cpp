@@ -156,9 +156,6 @@ class Datastore{
       }
       return 0;
     }
-
-
-
 };
 
 
@@ -365,7 +362,7 @@ class Connection {
   public:
     uint32_t ctlId; // a unique identifier that matches this connection's controller
     uint8_t A; // current value of the "A" bit, incoming ack-able packets with the same value will be treated as a retransmitment, different value buffers a reply and toggles the bit
-    Reply * repl; // a pointer to this connection's current acknowledgement reply
+    Reply * repl = 0; // a pointer to this connection's current acknowledgement reply
     //Reply * tempRepl; // a pointer to the temporary reply used
     IPAddress replyIP; // the ip address to reply to
     uint16_t replyPort; // the port to reply to
@@ -382,6 +379,8 @@ class Connection {
       ctlId = 0;
       A = 0b10000000;
       hasValidRepl = false;
+      if (!repl)
+        repl = new Reply(new uint8_t[replMaxLen],replMaxLen);
       repl->len = replMaxLen;
       //tempRepl->len = replMaxLen;
       priority = millis();
@@ -408,14 +407,25 @@ void setup_connection(){
 
 void setup() {
   // put your setup code here, to run once:
+  
   Serial.begin(115200);
   Serial.println();
+  Serial.println("start");
+  Serial.flush();
   #ifdef DEBUG_EN
     setup_debug();
   #endif
+  Serial.println("setup datastore");
+  Serial.flush();
   setup_datastore();
+  Serial.println("setup network");
+  Serial.flush();
   setup_network();
+  Serial.println("setup connection");
+  Serial.flush();
   setup_connection();
+  Serial.println("setup init");
+  Serial.flush();
   init_loop();
 }
 
@@ -562,20 +572,24 @@ bool loop_connection(){
       udp.readBytes(buf, bytes);
       Command pkt(buf, bytes);
       Connection& c = get_connection(ctlId);
-      if (process_packet(pkt, *c.repl, c)){
+      bool v = process_packet(pkt, *c.repl, c);
+      if (v){
         c.A = !c.A;
       }
-      if (pkt.ack){
+      if (v || pkt.ack){
         c.replyPort = udp.remotePort();
         if (udp.beginPacket(IPAddress(ctlId), c.replyPort)){
           udp.write(PROTO_SIG);
-          udp.write(c.repl->buf,c.repl->len);
+          udp.write(c.repl->buf, c.repl->len);
           udp.endPacket();
         }
       }
     }
 
     return false;
+  }
+  else{
+    //Serial.println("packet too short or invalid address");
   }
   return true;
 }
@@ -638,6 +652,7 @@ void loop() {
   else{
     if (wasSleeping){
       sleep_leave();
+      wasSleeping = false;
     }
     loopSleepTime = time;
   }
