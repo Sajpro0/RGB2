@@ -37,7 +37,7 @@ implementation B:
 	if ping works, we should get a packet back: 1byte protocol id + 1bit unset + 7bit ack response id + 1byte
 
 
-implementation B (again, tomorrow):
+implementation B (retry):
 	for tomorrow, think if we actually need an ack and all
 	for devices like this, response speed (in packets) is pretty unnecessary, we might not even use packet ids
 	Idea:

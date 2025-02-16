@@ -313,10 +313,95 @@ void setup_network(){
   Serial.println("Connected");
   uint32_t ipv4ip = WiFi.localIP().v4();
   memcpy(local_ip, (uint8_t*)&ipv4ip, 4);
+  Serial.println(String("ip: ") + local_ip[0] + "." + local_ip[1] + "." + local_ip[2] + "." + local_ip[3]);
   Serial.flush();
 }
 
+class Command {
+  public:
+    uint8_t  
+    A, // the "A" bit, toggles between acks
+    ack, // ack bit, signals a manual ack was set
+    cmd, // cmd bits, signals the issued command
+    len; // len of buf
+    uint8_t * buf; // entire packet without proto sig
+
+    Command(uint8_t * buf, uint8_t len){
+      this->len = len;
+      this->buf = buf;
+      A = *buf & 0b10000000;
+      ack = *buf & 0b01000000;
+      cmd = *buf & 0b00001111;
+    }
+
+};
+
+class Reply {
+  public:
+    uint8_t len; // the reply buffer's length
+    uint8_t * buf; // the reply buffer
+
+    Reply(uint8_t * buf, uint8_t len){
+      this->len = len;
+      this->buf = buf;
+    }
+
+    // set or clear the A bit
+    void setA(bool v){
+      if (v)
+        *buf |= 0b10000000;
+      else
+        *buf &= ~0b10000000;
+    }
+
+    // get the current value of A bit in this reply
+    uint8_t getA(){
+      return *buf & 0b10000000;
+    }
+};
+
+constexpr uint8_t replMaxLen = 128; // max size of the reply buffer of the replies
+class Connection {
+  public:
+    uint32_t ctlId; // a unique identifier that matches this connection's controller
+    uint8_t A; // current value of the "A" bit, incoming ack-able packets with the same value will be treated as a retransmitment, different value buffers a reply and toggles the bit
+    Reply * repl; // a pointer to this connection's current acknowledgement reply
+    //Reply * tempRepl; // a pointer to the temporary reply used
+    IPAddress replyIP; // the ip address to reply to
+    uint16_t replyPort; // the port to reply to
+    bool hasValidRepl; // indicating if the repl pointer is a valid currently stored retransmittment
+
+    unsigned long priority; // indicates the priority of this connection, lower means higher chance for replacement
+
+    Connection(){
+      reset();
+    }
+
+    // issue a reset on this connection
+    void reset(){
+      ctlId = 0;
+      A = 0b10000000;
+      hasValidRepl = false;
+      repl->len = replMaxLen;
+      //tempRepl->len = replMaxLen;
+      priority = millis();
+    }
+
+    // returns false if the acked command should be ignored as it is a retransmission
+    bool respond_to(Command& cmd){
+      if (cmd.A && A || !cmd.A && !A){
+        // retransmission
+        return false;
+      }
+      return true;
+    }
+};
+
 WiFiUDP udp;
+
+constexpr uint8_t connectionCount = 4;
+Connection conn[connectionCount];
+// setup the connection to the mcu
 void setup_connection(){
   udp.begin(UDP_LISTEN_PORT);
 }
@@ -334,27 +419,163 @@ void setup() {
   init_loop();
 }
 
-
-void discard_packet(WiFiUDP& c, int len){
+// currently does nothing as WiFiUDP discards of the packet automatically
+// intended for the future when ethernet is used (which is better as there is less delay)
+inline void discard_packet(WiFiUDP& c, int len){
   constexpr int chunk = 128;
   
 }
 
+void do_v(uint8_t vol){
+
+}
+void do_rgb(uint8_t rgb[3]){
+
+}
+void do_rgbv(uint8_t rgbv[4]){
+  do_rgb(rgbv);
+  do_v(rgbv[3]);
+}
+
+#include "replies.h"
+#include "errors.h"
+#include "commands.h"
+
+// acknowledge the receivement of the command
+void do_ack(Command& cmd, Reply& repl){
+  repl.setA(cmd.A);
+  repl.buf[0] = REPLY_RESPONSE;
+  repl.len = 1;
+}
+
+
+// process the incoming packet
+// returns true if a new reply was forged
+bool process_packet(Command& cmd, Reply& repl, Connection& con){
+  uint8_t payloadLen = cmd.len - 1;
+  switch (cmd.cmd){
+    case COMMAND_PING: {
+      constexpr uint32_t ping_const = 0x413A0D53;
+      if (cmd.len == 5){
+        if (con.respond_to(cmd)){ // check for retransmittment
+          if (cmd.ack){ // forced ack, simply acknowledge the command
+            do_ack(cmd, repl);
+            return true;
+          }
+          else{
+            uint32_t r_val = 0;
+            memcpy((uint8_t*)&r_val, cmd.buf + 1, 4);
+            r_val ^= ping_const;
+            repl.setA(cmd.A);
+            repl.buf[0] = REPLY_RESPONSE;
+            memcpy(repl.buf + 1, (uint8_t*)&r_val, 4);
+            repl.len = 5;
+            return true;
+          }
+        }
+      }
+    }
+    break;
+
+    case COMMAND_RGBV: {
+      if (payloadLen == 1) {
+        do_v(cmd.buf[1]);
+      }
+      else if (payloadLen == 3) {
+        do_rgb(cmd.buf + 1);
+      }
+      else if (payloadLen == 4) {
+        do_rgbv(cmd.buf + 1);
+      }
+      else {
+        if (cmd.ack && con.respond_to(cmd)){
+          repl.setA(cmd.A);
+          repl.buf[0] = REPLY_ERROR;
+          repl.buf[1] = ERROR_COMMANDINVALID;
+          repl.len = 2;
+          return true;
+        }
+      }
+      if (cmd.ack && con.respond_to(cmd)){
+        do_ack(cmd, repl);
+        return true;
+      }
+    }
+    break;
+
+    default: {
+      if (cmd.ack){
+        if (con.respond_to(cmd)){
+          repl.setA(cmd.A);
+          repl.buf[0] = REPLY_ERROR;
+          repl.buf[1] = ERROR_NOTIMPLEMENTED_COMMAND;
+          repl.len = 2;
+          return true;
+        }
+      }
+    }
+    break;
+  }
+  return false;
+}
+
+// returns the connection to be used for this packet id
+// expected behaviour:
+// >>>return in-use connection when found
+// >>>force-create a new one if not, even if there are no free ones
+Connection& get_connection(uint32_t ctlId){
+  Connection& to_replace = conn[0];
+  if (to_replace.ctlId == ctlId)
+    return to_replace;
+  for (int i = 1; i < connectionCount; i++){
+    Connection& current = conn[i];
+    if (current.ctlId == ctlId)
+      return current; // found a used connection
+    if (to_replace.priority > current.priority)
+      to_replace = current;
+  }
+  to_replace.reset(); // use the lowest priority connection as a new one
+  return to_replace;
+}
+
 bool loop_connection(){
   int bytes = udp.parsePacket();
-  if (bytes){
+  constexpr int maxBytes = 128;
+  auto ctlId = udp.remoteIP().v4();
+  if (bytes && ctlId){ // there is data and ip is non-zero (should never be zero, also would break get_connection()'s function)
+    // whatever arrived, we are not eligible for sleep anymore, return false
+    if (bytes > maxBytes){
+      discard_packet(udp, bytes);
+      return false; // garbage, but something, do not sleep
+    }
     uint8_t b = udp.read();
     bytes--;
-    
-    if (b != PROTO_SIG || bytes > 128){ // nonsense packet, throw away
+    if (b != PROTO_SIG){ // nonsense packet, throw away
       discard_packet(udp, bytes);
+      return false;
     }
     else{
       if (bytes == 0)
-        return false; // garbage arrived, but arrived, not eligible for sleep
-      b = udp.read();
-
+        return false; // packet too short
+      // packet okay
+      uint8_t buf[bytes];
+      udp.readBytes(buf, bytes);
+      Command pkt(buf, bytes);
+      Connection& c = get_connection(ctlId);
+      if (process_packet(pkt, *c.repl, c)){
+        c.A = !c.A;
+      }
+      if (pkt.ack){
+        c.replyPort = udp.remotePort();
+        if (udp.beginPacket(IPAddress(ctlId), c.replyPort)){
+          udp.write(PROTO_SIG);
+          udp.write(c.repl->buf,c.repl->len);
+          udp.endPacket();
+        }
+      }
     }
+
+    return false;
   }
   return true;
 }

@@ -1,0 +1,50 @@
+here are the packet ids for the 4bit command
+
+format:
+	number NAME [ACK]: (implementation requirement)
+		thorough description of the packet
+
+packet id 0 is reserved on both master and device
+
+master (controller issuing commands):
+	1 PING ACK: (required on all for verification)
+		both sides remember THE ping constant, a 32bit number, specifically (dec) "1094323539" or (hex) "0x413A0D53"
+		master sends a randomly chosen 32bit number as the payload
+		the device must respond to the packet with a 32bit number that equals the random number xorred with the constant to respond correctly
+		the reason for this is to identify rgb devices as there is close to zero % chance a device will respond correctly without using the same protocol
+		master: payload data: 32bit random number A
+		device: payload data: 32bit number (result of A xorred with THE ping constant)
+	2 RGBV: (required on any device that uses the protocol as intended)
+		sets the current rgbv values
+		possible payload data formats:
+			1byte for VOL
+			3bytes for RGB
+			3bytes for RGB + 1byte for VOL
+	3 CONNRESET: (required by all that support acked packets)
+		signals termination of the session and resetting everything connection-related to default values
+		mainly used to reset A to "set" state on the device (device is to respond to)
+	8 READREG ACK: (required by all that support datastore)
+		reads from a register in the datastore
+		possible payload data formats:
+			1byte reg id (read from 8bit datastore)
+			2byte reg id (read from 16bit datastore)
+		possible responses:
+			acked with command id of RESPONSE (device) and the register read data as specified by the set register
+			acked with command id of ERROR and carrying it's error code and error data
+	9 WRITEREG: (required by all that support datastore)
+		writes to a register, same format as READREG with the addition of the written value to the payload data
+		manually ackable (the command can be issued without wanting an ack back, which is unsafe but okay in certain scenarios,
+			command's ack response is either error or without payload
+		
+
+device (rgb color thing):
+	1 RESPONSE ACK:
+		a response to the to-ack command
+		payload data format: defined by command
+		the payload is defined by issued command for force-acknowledge packets ( command can have a different acknowledge result when force-acknowledged)
+	15 ERROR ACK:
+		something went wrong, reply with the error packet
+		payload data format: 1byte error id + error data
+		error id 0 is reserved for now
+		error ids >127 always have a human readable string payload
+		

@@ -1,0 +1,6 @@
+#define COMMAND_RESV 0
+#define COMMAND_PING (uint8_t)1
+#define COMMAND_RGBV 2
+#define COMMAND_CONNRESET 3
+#define COMMAND_READREG 8
+#define COMMAND_WRITEREG 9

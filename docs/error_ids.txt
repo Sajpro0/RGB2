@@ -1,0 +1,14 @@
+this file contains the error ids contained in the ERROR device packet
+
+0 reserved
+1-127 error-defined
+128-255 human readable string payload or no payload
+
+action not implemented:
+	128 issued command
+	129 register read/write
+
+160 issued command invalid (command issued incorrectly)
+161 issued command failed (issued correctly but failed to run)
+
+255 - custom/unknown/undefineable

@@ -5,9 +5,56 @@ used over network X which needs to handle error detection, but not packet delive
 UDP port: 39368
 proto sig: 159
 
+all "resv" bits must be UNSET, unless used by the command
+
 packet format:
-	1 bit acknowledgement + 7bit command (+ 8bit acknowledgement id if ack bit is set) + command data
+	1byte proto id + 1bit A (retransmission detection bit) + 1bit ack (if set on ack packets, the response is supressed
+	while we only get an acknowledgement about the packet's arrival) + 2bit resv + 4bit command + command data
+
+ignored (packets are defined to be ignored):
+	1byte proto id + (end)
+
+failing packets cannot respond with error packets unless it is acknowledgeable
+
+NOTE: "A" bit is NOT shared between controllers, if two controllers contact the same device, device MUST behave like this:
+	when device supports both masters at once:
+		A for this master is set to "1" as it is the start of the communication with it for this device
+		device can now talk to both clients independently without the ack system going out of sync
+		(works)
+	when device can only support a single master:
+		device MUST notice this is a different master and should switch to that master
+		A for is set to "1" as it is the start of the communication
+		(works)
+	RESET packets are also treated the same way (device supporting multiple masters only resets the issuing master's connection)
 
 acknowledging packets:
-	1bit ack 1 + 7bit static command id for ack response + 8bit acknowledged id (+ specific packet response data)
-	an ack request is needed for commands that failed to process
+	example 1:
+		request:
+			1byte proto id + 1bit A + 1bit unset + 2bit resv + 4bit command + command data
+			retransmit until:
+				received ack:
+					toggle our value of A bit (the bit will be different in another ack packet)
+					(end)
+				timed out:
+					treat device as disconnected and reset the connection (the definition of the action is undefined and open to implementation)
+					(end)
+		response:
+			1byte proto id + 1bit A (with the same value as the acknowledged packet) + 3bit resv + 4bit command + command response data
+			(retransmit when packet with same value of A is received as this one)
+	example 2:
+		request:
+			1byte proto id + 1bit A + 1bit set + 2bit resv + 4bit command + command data
+			retransmit until:
+				received ack:
+					toggle our value of A bit (the bit will be different in another ack packet)
+					(end)
+				timed out:
+					treat device as disconnected and reset the connection (the definition of the action is undefined and open to implementation)
+					(end)
+		response:
+			packet received ok:
+				1byte proto id + 1bit A (with the same value as the acknowledged packet) + 3bit resv + 4bit command for ACK
+				(retransmit when packet with same value of A is received as this one)
+			error in non-ack packet:
+				reply ERROR packet
+				(retransmit when packet with same value of A is received as this one)

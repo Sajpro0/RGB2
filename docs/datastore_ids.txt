@@ -17,3 +17,7 @@ all of the above are just examples and are not actually used
 	it is UNDEFINED if this register is included in the list
 32 (rw:string): wifi login SSID prefided with a "1" character if it is rw and "0" if the value is not changeable
 33 (rw:string): wifi login password with same format as id 32
+128 (rpc:byte[4]): get or set current rgbv values, the bytes go as RGBV, indicating the current percentage (0-255) of the color or volume,
+	this and it's subversions might not be implemented on a device while the device might still accept rgbv commands
+129 (rpc:bytes[8]): 128 but 16bit precision, does NOT directly translate to percentage, min is 0 and max is determined by register 130
+130 (rpc:bytes[8]): 129 but carries the maximum values for each property

@@ -8,6 +8,7 @@ datastore values can be:
 		the value is temporary and is only saved when receiving a save command unless specified otherwise (some kind of autosave system)
 	temporary: the value is defined at start according to it's documentation
 		the value can be set and get by the controller as well as the device itself unless specified otherwise
+		cannot be used for rpc, unlike rpc, which can be implemented as regular temp storage
 	rpc: the value is generated and sent back on read or processed on write
 
 permanent storage resides in the microcontroller's data memory (defined as const in the program) so everything points to that location
