@@ -4,3 +4,6 @@
 
 /.vs
 /src/ESP12E/src/my_settings.h
+/src/TestApp/.vs/TestApp/FileContentIndex
+/src/TestApp/TestApp/bin/Debug
+/src/TestApp/TestApp/obj/Debug
