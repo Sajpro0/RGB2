@@ -1,0 +1,29 @@
+log of designing the ui for the main rgb2 application
+
+(I TYPED THIS OUT ON MY PHONE)
+
+also to keep communications the fastest, instead of having a centralized server, every app will have it's own server
+
+anyway, ui design
+main idea is to be universal asf by making a system for programming thru code blocks and interconnecting them
+then another idea is to also have a thread object/block and event object/block
+so the original idea was to have the blocks but it wasn't too universal
+so using this, there could be custom blocks for minimalizing code and then specific blocks from an application like the thread and event block that could be used to initiate everything
+anyway tldr
+you have an example of a thread block that triggers every x milliseconds to send a packet to the rgb lights
+this would send an impulse through the code block chain until it reaches an output, for this, objects requiring two outputs would need to request a value from the other required input, so for this, output ports would have directions and only some ports could be connected when they do not match direction-wise
+thanks to this, there could be only output ports, but there also could be request ports that you can always get a value from (you cannot request a value from a non-request register code-wise)
+ofc ports can be both, tho the use seems limited
+there can be convertor blocks like a buffer with a default value that can convert from output/impulse ports to request ports
+
+
+also another ui idea
+have like a top panel thingies that would behave like a hotbar, like 8-10 slots for use by applications that the user can use to change the view
+problem would be that these would fill up quick
+maybe they could have their window locked and there could be an expand button that would show the rest of them
+
+as for blocks and ports
+blocks would have a static name and a static description that would show up when hovering over it's name
+also blocks can be drawable defined by the block, with some defaults provided (blocks can draw themselves manually but default simple drawers are provided for use)
+ports and their drawing is locked to a type, tho that can be retextured using texture packs and whatnot
+also ports would have a shared icon for direction, the icon would be monochrome so it can be recolored by texture packs as well as custom blocks

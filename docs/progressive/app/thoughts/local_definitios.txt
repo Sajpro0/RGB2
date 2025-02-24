@@ -1,0 +1,5 @@
+local definitions
+
+program - the running exe of the application
+app - unless mistyped, means an app loadable in the program ui
+app processes, threads, events etc - self explanatory, means the loadable app

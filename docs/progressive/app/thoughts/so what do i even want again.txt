@@ -1,0 +1,16 @@
+here lies what comes up to my mind that i actually wanna use the thing for so i can hopefully use that to design a ui system that has the least problems
+caused by not being universal enough
+
+scenarios:
+	i want to just set the rgb to some value:
+		i can have an application specific for this
+		as i wanna do the whole process thing, applications would just
+		have a Load hook type of thing that can also add windows it
+		can draw to
+		the window can just have it's own sliders for the rgb values
+		and a button to send them
+		program simply works, it can use an rgb group to select devices
+		and it can send commands to it
+		done by:
+			an output-only code block that outputs an impulse output
+			(triggered by the button)

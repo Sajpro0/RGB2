@@ -1,0 +1,11 @@
+here are the problems found or thought of and their fixes or improvement ideas
+
+problem: multiple masters fighting over a device
+	Idea:
+		a way to get informed about this - be able to tell the time passed since last packet was received for each connection
+		this way is also good because devices with multiple connectable clients as they already store this and use it to prioritize reusing connections
+		main idea is to propably add another packet that behaves like the ping packet but with extra data and ignores the A bit and is ignored in creating connections
+
+problem: optimizing using broadcast without sending data to each client
+	Idea: open other udp ports for this
+		put clients into groups so we can still use broadcast but with a different port

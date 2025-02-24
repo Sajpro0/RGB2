@@ -1,0 +1,170 @@
+here are the stuff i found out i will implement so the mf works
+
+the program itself:
+	the program itself should be just thought of like a desktop ui
+	so every dll added can add an application object that is loadable
+	and works just like a process :3
+
+the process/application object:
+	so it's object can be referenced in it's internal code to access
+	things like it's icon or status etc
+
+threads, shared memory for all processes and logic blocks:
+	also this can be used to provide the threads as well as
+	a form of shared memory
+
+window object:
+	application can request a window and it will get a drawable window
+	it can use
+
+rgb lock:
+	when applications need to use an rgb device, it will acquire a lock
+	on it, preventing other applications from claiming it for themselves
+	until the lock is raised when the application is done with the lock
+	(the intention was long-term locking the rgb)
+	better idea is that the lock will be there but when a different app
+	wants to use it, it will unlock it for the app and stop itself
+	so the flow is something like:
+		app A locks rgb (lock was free)
+		app A uses it
+		app B wants to use the rgb, and it requests the lock
+		app A stops it's internal workings and gives the lock over
+			to the app B
+		app B now has the lock
+	it would be convenient to have a universal PAUSE or LOCK button
+	for all apps that use it so it can easily resume it's workings
+	PAUSE seems more universal, so will use that instead, apps will
+	pause when they lose the lock and can be unpaused, which will
+	cause them to reacquire the lock
+
+rgb interface:
+	i wanna automatically group the devices by certain things
+	first idea was to have a general rgb interface that would just accept
+	rgb commands, but that is a bad idea as i wanted to be able to select
+	devices and send commands to them individually
+	i thought this would be hard but got an idea:
+		simply, there is a list of all the devices found
+		then there can be blocks to select only specific devices
+		and then create a single group object from them
+		when a device throws an error, it can be handled by the
+		application (by that i mean i haven't figured out generalized
+		exception handling as of now)
+		also for devices disconnecting, they can just be removed
+		from the group
+		this could be made detectable by attaching a block that accepts
+		an impulse about the group update which would forward the signal
+		to a block that will redirect the flow to a set location in the code
+
+
+mouse handling:
+	app windows are intended to call a method to get the mouse and
+	keyboard status, which may be null (when the mouse is not captured
+	for that window -> the program is minimized or overlay is currently
+	capturing the object)
+
+hotbar:
+	it would look cool, thats all
+	anyway sooo thinking i would have liek 8 slots that pop up from the
+	top if they are clickable where that means the slot was claimed
+	by an app window, or it has another reason
+	current idea is:
+		have 8 slots (will refer to this as "quick windows")
+		first 7 are for apps and are pinnable, making them only for a
+		specific app window and they will not be claimed by other apps
+		the 8th one would pop up if there is more windows than the
+		hotbar can handle and will be used for displaying 3 dots to
+		open a scrollable grid with all the windows
+
+fullscreen:
+	the whole program would be made to run in fullscreen, tho this
+	fullscreen is meant for the apps, that can trigger fullscreen mode
+	so that the overlay completely dissapears
+	i think this could be triggered by the app but also be universal
+	triggerred by F11 and exited by F11
+	when an app overrides F11, F11 + RCtrl will be used instead
+	RCtrl cannot be overriden (or shouldn't be as it might break the app
+	that tries to do so)
+
+overlay windows:
+	right to the quick windows hotbar, about quarter of the size
+	there would be 4 little buttons organized as a square
+	for now there would be just 2 buttons, might add more if needed
+	anyway, purpose is to add a button for a task manager for the apps
+	and whatnot and the second again 3 dots for a scrollable grid
+	selection for overlay windows added from apps
+	actually got idea for the other buttons
+	one could be an exception window
+	---better idea---
+	have "wings" made up by 3 small buttons on each side
+	the right side would be overlay
+	the left side could be like build mode or whatnot
+
+program name:
+	CobeBlogz
+	it is shitty enough and descriptive
+	the b is a d but flipped and g for ck, finishing off with a z instead of s
+	program made around code blocks and i will add the rgb part to it
+
+call tree problems:
+	for impulse blocks, the receiving block would simply do it's function
+	and then call the connected output port
+	this is also great as it will be in the exception window
+	and you can highlight the call in the code blocks
+	problem comes when it comes to loops as an infinite loop would cause
+	a stack overflow
+	we wanna reset the call when it comes back to the loop
+	for the loop, the call would just look like:
+		impulse comes in
+		we check if condition is true and call the connected port
+		the loop comes around
+		---wait---
+		we do not need any loop blocks, as i wanna implement automatic
+		connector merging, so it could instead be that the method used
+		to call would check if this call goes through this node already
+		and if so, it would be noted and the call would be cancelled
+		then, when the call ends, it would be checked if the call looped
+		over, which if it did, the call will happen again
+		also, code blocks that do not change the input data should
+		always be passthrough
+		apparent problems:
+			multithreading would not work
+			solve would propably be that each thread will use
+			a separate scene
+
+build mode:
+	got a very rough idea, but the build mode would be accessed by one
+	of the buttons on the left-sided hotbar wing, which would load up
+	designer hotbar on the right side of the screen which would allow
+	changing code block connections
+	this hotbar would be same as the top hotbar but with more slots
+	problem:
+		need a universal way so the user can open a code block space
+		and a universal way to store it so that it can be saved and
+		updated in real time
+		---fixes---
+		when editing, the scene can be paused
+		also when editing, it should be thought of as "a view of the scene"
+		when disconnecting, it is only allowed when the path is currently
+		not called, which it will try to wait for and then pause
+		the execution
+		execution will resume as soon as the connector is connected back
+		this can be paused of course so that execution stays paused after
+		the cable is connected
+		this may change of course
+		also, it would make sense for all code block scenes to come from
+		a single space which would be local scenes and apps can provide
+		examples for using their added blocks
+		the scenes are serialized and stored on disk so they can
+		load up later
+
+
+code block multithreading:
+	by default, code scenes would propably just hang and wait for
+	the previous call to finish
+	there could also be multithreading specific blocks that would
+	forward the signal a different way when the normal one is in use
+	and ofc there could be generic multithreading support by multiplying
+	the code scene when a new thread tries to call it and it is in use
+	up to N times and then throwing
+	however for this, things like shared memory will be unsafe
+	so for this, shared memory reads will have locks on them

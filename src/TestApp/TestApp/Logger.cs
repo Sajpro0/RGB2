@@ -12,10 +12,12 @@ namespace TestApp
 	public class Logger
 	{
 		public static int DebugLevel => 3; // 0 being none, 1 being basic info, 2 intermediate info and 3 including method calls
-		public static Logger Main = new Logger(null);
+		public static Logger Main = new Logger();
 		static object writeLock = new object();
 
 		public string Prefix = string.Empty;
+
+		public Func<string> GetPrefix;
 
 		public LogLevel DefaultLogLevel = LogLevel.Info;
 
@@ -33,6 +35,13 @@ namespace TestApp
 		{
 			this.Prefix = prefix;
 			DefaultLogLevel = defaultLogLevel ?? LogLevel.Info;
+			GetPrefix = () => pref;
+		}
+
+		public Logger(Func<string> pref, LogLevel defaultLogLevel = null)
+		{
+			DefaultLogLevel = defaultLogLevel ?? LogLevel.Info;
+			GetPrefix = pref;
 		}
 
 		public void Begin()
@@ -53,6 +62,7 @@ namespace TestApp
 				return; // skip if insufficient debug level
 
 			string writePrefix = $"[{level.Name}] ";
+			var pref = GetPrefix();
 			if (pref.Length > 0)
 				writePrefix += $"[{pref}] ";
 			var lines = (from x in msg.ToString().Split('\n')
@@ -97,7 +107,7 @@ namespace TestApp
 
 		public Logger Mine(object me, object descriptor, LogLevel defLog = null)
 		{
-			var l = new Logger(GenPrefix(GenPrefix(Prefix, me), descriptor), defLog);
+			var l = new Logger(GenPrefixM(GenPrefix(Prefix, me), descriptor), defLog);
 			l.OnWriteLine = x => OnWriteLine?.Invoke(x);
 			Log($"new logger for [{l.pref}]", LogLevel.Debug2);
 			return l;
@@ -132,6 +142,36 @@ namespace TestApp
 					t = newOwner.GetType();
 
 				return $"{t.FullName}@(T{Thread.CurrentThread.ManagedThreadId}{(string.IsNullOrEmpty(Thread.CurrentThread.Name) ? string.Empty : $" \'{Thread.CurrentThread.Name}\'")})";
+			}
+		}
+
+		Func<string> GenPrefixM(string loggerPrefix, object newOwner)
+		{
+			if (newOwner == null)
+				throw new ArgumentNullException(nameof(newOwner));
+			if (loggerPrefix == null || loggerPrefix.Trim().Length == 0)
+				loggerPrefix = string.Empty;
+			else
+				loggerPrefix += " ";
+			if (newOwner is string str)
+			{
+				str = str.Trim();
+				if (str.Length > 0)
+				{
+					str = loggerPrefix + str;
+					return () => str;
+				}
+				throw new ArgumentException("Must be a non-empty string", nameof(newOwner));
+			}
+			else
+			{
+				Type t;
+				if (newOwner is Type type)
+					t = type;
+				else
+					t = newOwner.GetType();
+
+				return () => $"{t.FullName}@(T{Thread.CurrentThread.ManagedThreadId}{(string.IsNullOrEmpty(Thread.CurrentThread.Name) ? string.Empty : $" \'{Thread.CurrentThread.Name}\'")})";
 			}
 		}
 	}
